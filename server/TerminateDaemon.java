@@ -12,13 +12,12 @@ public class TerminateDaemon implements Runnable {
 	}
 	
 	public void run() {
+		System.out.println(Thread.currentThread().getName() + " TerminateDaemon Started");
 		while (true) {
 			try {
-				System.out.println("TerminateDaemon");
 				(new Thread(new TerminateWorker(ftpServer, tSocket.accept()))).start();
 			} catch (Exception e) {
-				System.out.println("Terminate threadID: " + Thread.currentThread().getId() + " could not start worker");
-				e.printStackTrace();
+				System.out.println(Thread.currentThread().getName() + " TerminateDaemon failed to start TerminateWorker");
 			}
 		}
 	}

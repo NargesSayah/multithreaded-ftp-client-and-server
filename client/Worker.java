@@ -2,6 +2,7 @@ package ftp.client;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -12,6 +13,7 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -21,10 +23,13 @@ import java.util.Scanner;
 
 public class Worker implements Runnable {
 	private FTPClient ftpClient;
+	private String hostname;
+	private int nPort;
 	private Socket socket;
 	private Path path, serverPath;
 	private List<String> tokens;
 	private boolean input;
+	private int terminateID;
 	
 	//Stream
 	private InputStreamReader iStream;
@@ -36,6 +41,8 @@ public class Worker implements Runnable {
 	
 	public Worker(FTPClient ftpClient, String hostname, int nPort) throws Exception {
 		this.ftpClient = ftpClient;
+		this.hostname = hostname;
+		this.nPort = nPort;
 		
 		//Connect to server
 		InetAddress ip = InetAddress.getByName(hostname);
@@ -51,10 +58,6 @@ public class Worker implements Runnable {
 		//Set current working directory
 		path = Paths.get(System.getProperty("user.dir"));
 		System.out.println("Connected to: " + ip);
-	}
-	
-	public Worker(FTPClient ftpClient) {
-		this.ftpClient = ftpClient;
 	}
 	
 	public void initiateStream() {
@@ -76,7 +79,6 @@ public class Worker implements Runnable {
 			//set server directory
 			String get_line;
 			if (!(get_line = reader.readLine()).equals("")) {
-				System.out.println(get_line);
 				serverPath = Paths.get(get_line);
 			}
 		} catch (Exception e) {
@@ -90,8 +92,28 @@ public class Worker implements Runnable {
 			return;
 		}
 		
+		if (tokens.get(1).endsWith(" &")) {
+			tokens.set(1, tokens.get(1).substring(0, tokens.get(1).length()-1).trim());
+			//background
+			
+			List<String> tempList = new ArrayList<String>(tokens);
+			Path tempPath = Paths.get(serverPath.toString());
+			
+			(new Thread(new GetWorker(ftpClient, hostname, nPort, tempList, tempPath))).start();
+			
+			Thread.sleep(50);
+			
+			return;
+		}
+		
+		//same transfer
+		if (!ftpClient.transfer(serverPath.resolve(tokens.get(1)))) {
+			System.out.println("error: file already transfering");
+			return;
+		}
+		
 		//send command
-		dStream.writeBytes("get " + tokens.get(1) + "\n");
+		dStream.writeBytes("get " + serverPath.resolve(tokens.get(1)) + "\n");
 		
 		//error messages
 		String get_line;
@@ -100,8 +122,26 @@ public class Worker implements Runnable {
 			return;
 		}
 		
+		//wait for terminate ID
+		try {
+			terminateID = Integer.parseInt(reader.readLine());
+		} catch(Exception e) {
+			System.out.println("Invalid TerminateID");
+		}
+		//System.out.println("TerminateID: " + terminateID);
+		
+		//CLIENT side locking
+		ftpClient.transferIN(serverPath.resolve(tokens.get(1)), terminateID);
+		
+		
 		//get file size
-		long fileSize = Long.parseLong(reader.readLine());
+		byte[] fileSizeBuffer = new byte[8];
+		byteStream.read(fileSizeBuffer);
+		ByteArrayInputStream bais = new ByteArrayInputStream(fileSizeBuffer);
+		DataInputStream dis = new DataInputStream(bais);
+		long fileSize = dis.readLong();
+		
+		//receive the file
 		FileOutputStream f = new FileOutputStream(new File(tokens.get(1)));
 		int count = 0;
 		byte[] buffer = new byte[8192];
@@ -112,11 +152,34 @@ public class Worker implements Runnable {
 			bytesReceived += count;
 		}
 		f.close();
+		
+		//CLIENT side un-locking
+		ftpClient.transferOUT(serverPath.resolve(tokens.get(1)), terminateID);
 	}
 	
 	public void put() throws Exception {
 		if (tokens.size() != 2) {
 			invalid();
+			return;
+		}
+		
+		if (tokens.get(1).endsWith(" &")) {
+			tokens.set(1, tokens.get(1).substring(0, tokens.get(1).length()-1).trim());
+			//background
+			
+			List<String> tempList = new ArrayList<String>(tokens);
+			Path tempPath = Paths.get(serverPath.toString());
+			
+			(new Thread(new PutWorker(ftpClient, hostname, nPort, tempList, tempPath))).start();
+			
+			Thread.sleep(50);
+			
+			return;
+		}
+		
+		//same transfer
+		if (!ftpClient.transfer(serverPath.resolve(tokens.get(1)))) {
+			System.out.println("error: file already transfering");
 			return;
 		}
 		
@@ -131,28 +194,48 @@ public class Worker implements Runnable {
 		//transfer file
 		else {
 			//send command
-			dStream.writeBytes("put " + tokens.get(1) + "\n");
+			dStream.writeBytes("put " + serverPath.resolve(tokens.get(1)) + "\n");
 			
-			File file = new File(path.resolve(tokens.get(1)).toString());
-			long fileSize1 = file.length();
+			//wait for terminate ID
+			try {
+				terminateID = Integer.parseInt(reader.readLine());
+			} catch(Exception e) {
+				System.out.println("Invalid TerminateID");
+			}
+			//System.out.println("TerminateID: " + terminateID);
 			
-			//send file size
-			dStream.writeBytes(fileSize1 + "\n");
+			//CLIENT side locking
+			ftpClient.transferIN(serverPath.resolve(tokens.get(1)), terminateID);
+			
+			//signal to start writing
+			reader.readLine();
 			
 			//need to figure
 			Thread.sleep(100);
 			
-			byte[] buffer1 = new byte[8192];
+			
+			byte[] buffer = new byte[8192];
 			try {
+				File file = new File(path.resolve(tokens.get(1)).toString());
+				
+				//write long filesize as first 8 bytes
+				long fileSize = file.length();
+				byte[] fileSizeBytes = ByteBuffer.allocate(8).putLong(fileSize).array();
+				dStream.write(fileSizeBytes, 0, 8);
+				
+				//write file
 				BufferedInputStream in = new BufferedInputStream(new FileInputStream(file));
-				int count2 = 0;
-				while((count2 = in.read(buffer1)) > 0)
-					dStream.write(buffer1, 0, count2);
+				int count = 0;
+				while((count = in.read(buffer)) > 0)
+					dStream.write(buffer, 0, count);
 				
 				in.close();
 			} catch(Exception e){
 				System.out.println("transfer error: " + tokens.get(1));
 			}
+			
+			//CLIENT side un-locking
+			ftpClient.transferOUT(serverPath.resolve(tokens.get(1)), terminateID);
 		}
 	}
 	
@@ -223,10 +306,8 @@ public class Worker implements Runnable {
 		
 		//set server directory
 		String get_line;
-		if (!(get_line = reader.readLine()).equals("")) {
-			System.out.println(get_line);
+		if (!(get_line = reader.readLine()).equals(""))
 			serverPath = Paths.get(get_line);
-		}
 	}
 	
 	public void mkdir() throws Exception {
@@ -269,6 +350,11 @@ public class Worker implements Runnable {
 		//only one argument
 		if (tokens.size() != 1) {
 			invalid();
+			return;
+		}
+		
+		if (!ftpClient.quit()) {
+			System.out.println("error: Transfers in progress");
 			return;
 		}
 		
@@ -355,7 +441,6 @@ public class Worker implements Runnable {
 					default:
 						System.out.println("unrecognized command '" + tokens.get(0) + "'");
 						System.out.println("Try `help' for more information.");
-						
 				}
 			} while (!command.equalsIgnoreCase("quit"));
 			input.close();

@@ -17,6 +17,7 @@ public class TerminateWorker implements Runnable {
 	}
 	
 	public void run() {
+		System.out.println(Thread.currentThread().getName() + " TerminateWorker Started");
 		try {
 			//Input
 			InputStreamReader iStream = new InputStreamReader(tSocket.getInputStream());
@@ -42,7 +43,7 @@ public class TerminateWorker implements Runnable {
 			//command selector
 			switch(tokens.get(0)) {
 				case "terminate":
-					ftpServer.terminate(tokens.get(1));
+//					ftpServer.terminate(tokens.get(1));
 				default:
 					System.out.println("TerminateWorker invalid command");
 			}

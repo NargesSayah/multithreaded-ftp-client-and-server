@@ -12,13 +12,12 @@ public class NormalDaemon implements Runnable {
 	}
 	
 	public void run() {
+		System.out.println(Thread.currentThread().getName() + " NormalDaemon Started");
 		while (true) {
 			try {
-				System.out.println("NormalDaemon");
 				(new Thread(new NormalWorker(ftpServer, nSocket.accept()))).start();
 			} catch (Exception e) {
-				System.out.println("Normal threadID: " + Thread.currentThread().getId() + " could not start worker");
-				e.printStackTrace();
+				System.out.println(Thread.currentThread().getName() + " NormalDaemon failed to start NormalWorker");
 			}
 		}
 	}

@@ -2,6 +2,7 @@ package ftp.server;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -10,6 +11,7 @@ import java.io.FileOutputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
@@ -53,44 +55,89 @@ public class NormalWorker implements Runnable {
 	public void get() throws Exception {
 		//not a directory or file
 		if (Files.notExists(path.resolve(tokens.get(1)))) {
-			dStream.writeBytes("get: " + tokens.get(1) + ": No such file or directory" + "\n");
+			dStream.writeBytes("get: " + path.resolve(tokens.get(1)).getFileName() + ": No such file or directory" + "\n");
+			return;
 		} 
 		//is a directory
-		else if (Files.isDirectory(path.resolve(tokens.get(1)))) {
-			dStream.writeBytes("get: " + tokens.get(1) + ": Is a directory" + "\n");
-		} 
-		//transfer file
-		else {
-			//blank message
-			dStream.writeBytes("\n");
-			
-			File file = new File(path.resolve(tokens.get(1)).toString());
-			long fileSize = file.length();
-			
-			//send file size
-			dStream.writeBytes(fileSize + "\n");
-			
-			//need to figure
-			Thread.sleep(100);
-			
-			byte[] buffer = new byte[8192];
-			try {
-				BufferedInputStream in = new BufferedInputStream(new FileInputStream(file));
-				int count = 0;
-				while((count = in.read(buffer)) > 0)
-					dStream.write(buffer, 0, count);
-				
-				in.close();
-			} catch(Exception e) {
-				System.out.println("transfer error: " + tokens.get(1));
-			}
+		if (Files.isDirectory(path.resolve(tokens.get(1)))) {
+			dStream.writeBytes("get: " + path.resolve(tokens.get(1)).getFileName() + ": Is a directory" + "\n");
+			return;
 		}
+		
+		//////////
+		// LOCK //
+		//////////
+		int lockID = ftpServer.getIN(path.resolve(tokens.get(1)));
+		if (Main.DEBUG) System.out.println(lockID);
+		if (lockID == -1) {
+			dStream.writeBytes("get: " + path.resolve(tokens.get(1)).getFileName() + ": No such file or directory" + "\n");
+			return;
+		}
+		
+		//blank message
+		dStream.writeBytes("\n");
+		
+		//send terminateID
+		dStream.writeBytes(lockID + "\n");
+		
+		//need to figure
+		Thread.sleep(100);
+		
+		
+		//transfer file
+		byte[] buffer = new byte[8192];
+		try {
+			File file = new File(path.resolve(tokens.get(1)).toString());
+			
+			//write long filesize as first 8 bytes
+			long fileSize = file.length();
+			byte[] fileSizeBytes = ByteBuffer.allocate(8).putLong(fileSize).array();
+			dStream.write(fileSizeBytes, 0, 8);
+			
+			//write file
+			BufferedInputStream in = new BufferedInputStream(new FileInputStream(file));
+			int count = 0;
+			while((count = in.read(buffer)) > 0)
+				dStream.write(buffer, 0, count);
+			
+			in.close();
+		} catch(Exception e) {
+			System.out.println("transfer error: " + tokens.get(1));
+		}
+		
+		////////////
+		// UNLOCK //
+		////////////
+		ftpServer.getOUT(path.resolve(tokens.get(1)), lockID);
 	}
 	
 	public void put() throws Exception {
+		//LOCK ID
+		int lockID = ftpServer.putIN_ID(path.resolve(tokens.get(1)));
+		if (Main.DEBUG) System.out.println(lockID);
+		
+		//send message ID
+		dStream.writeBytes(lockID + "\n");
+		
+		
+		//////////
+		// LOCK //
+		//////////
+		while (!ftpServer.putIN(path.resolve(tokens.get(1)), lockID))
+			Thread.sleep(10);
+		
+		//can write
+		dStream.writeBytes("\n");
+		
 		//get file size
-		long fileSize = Long.parseLong(reader.readLine());
-		FileOutputStream f = new FileOutputStream(new File(path.resolve(tokens.get(1)).toString()));
+		byte[] fileSizeBuffer = new byte[8];
+		byteStream.read(fileSizeBuffer);
+		ByteArrayInputStream bais = new ByteArrayInputStream(fileSizeBuffer);
+		DataInputStream dis = new DataInputStream(bais);
+		long fileSize = dis.readLong();
+		
+		//receive the file
+		FileOutputStream f = new FileOutputStream(new File(tokens.get(1)).toString());
 		int count = 0;
 		byte[] buffer = new byte[8192];
 		long bytesReceived = 0;
@@ -100,9 +147,20 @@ public class NormalWorker implements Runnable {
 			bytesReceived += count;
 		}
 		f.close();
+		
+		////////////
+		// UNLOCK //
+		////////////
+		ftpServer.putOUT(path.resolve(tokens.get(1)), lockID);
 	}
 	
 	public void delete() throws Exception {
+		if (!ftpServer.delete(path.resolve(tokens.get(1)))) {
+			dStream.writeBytes("delete: cannot remove '" + tokens.get(1) + "': The file is locked" + "\n");
+			dStream.writeBytes("\n");
+			return;
+		}
+		
 		try {
 			boolean confirm = Files.deleteIfExists(path.resolve(tokens.get(1)));
 			if (!confirm) {
@@ -188,6 +246,8 @@ public class NormalWorker implements Runnable {
 	}
 	
 	public void run() {
+		System.out.println(Thread.currentThread().getName() + " NormalWorker Started");
+		exitThread:
 		while (true) {
 			try {
 				//check every 10 ms for input
@@ -216,7 +276,7 @@ public class NormalWorker implements Runnable {
 					case "cd": 		cd();		break;
 					case "mkdir": 	mkdir();	break;
 					case "pwd": 	pwd();		break;
-					case "quit": 	quit();		break;
+					case "quit": 	quit();		break exitThread;
 					default:
 						System.out.println("invalid command");
 				}
@@ -224,5 +284,6 @@ public class NormalWorker implements Runnable {
 				e.printStackTrace(); //TODO
 			}
 		}
+		System.out.println(Thread.currentThread().getName() + " exit");
 	}
 }
