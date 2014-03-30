@@ -1,5 +1,13 @@
 package ftp.server;
 
+/**
+ * 
+ * @author Will Henry
+ * @author Vincent Lee
+ * @version 1.0
+ * @since March 26, 2014
+ */
+
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -83,9 +91,13 @@ public class NormalWorker implements Runnable {
 		//need to figure
 		Thread.sleep(100);
 		
+		if (ftpServer.terminateGET(path.resolve(tokens.get(1)), lockID)) {
+			quit();
+			return;
+		}
 		
 		//transfer file
-		byte[] buffer = new byte[8192];
+		byte[] buffer = new byte[1000];
 		try {
 			File file = new File(path.resolve(tokens.get(1)).toString());
 			
@@ -94,11 +106,22 @@ public class NormalWorker implements Runnable {
 			byte[] fileSizeBytes = ByteBuffer.allocate(8).putLong(fileSize).array();
 			dStream.write(fileSizeBytes, 0, 8);
 			
+			if (ftpServer.terminateGET(path.resolve(tokens.get(1)), lockID)) {
+				quit();
+				return;
+			}
+			
 			//write file
 			BufferedInputStream in = new BufferedInputStream(new FileInputStream(file));
 			int count = 0;
-			while((count = in.read(buffer)) > 0)
+			while((count = in.read(buffer)) > 0) {
+				if (ftpServer.terminateGET(path.resolve(tokens.get(1)), lockID)) {
+					in.close();
+					quit();
+					return;
+				}
 				dStream.write(buffer, 0, count);
+			}
 			
 			in.close();
 		} catch(Exception e) {
@@ -126,8 +149,18 @@ public class NormalWorker implements Runnable {
 		while (!ftpServer.putIN(path.resolve(tokens.get(1)), lockID))
 			Thread.sleep(10);
 		
+		if (ftpServer.terminatePUT(path.resolve(tokens.get(1)), lockID)) {
+			quit();
+			return;
+		}
+		
 		//can write
 		dStream.writeBytes("\n");
+		
+		if (ftpServer.terminatePUT(path.resolve(tokens.get(1)), lockID)) {
+			quit();
+			return;
+		}
 		
 		//get file size
 		byte[] fileSizeBuffer = new byte[8];
@@ -136,12 +169,22 @@ public class NormalWorker implements Runnable {
 		DataInputStream dis = new DataInputStream(bais);
 		long fileSize = dis.readLong();
 		
+		if (ftpServer.terminatePUT(path.resolve(tokens.get(1)), lockID)) {
+			quit();
+			return;
+		}
+		
 		//receive the file
 		FileOutputStream f = new FileOutputStream(new File(tokens.get(1)).toString());
 		int count = 0;
-		byte[] buffer = new byte[8192];
+		byte[] buffer = new byte[1000];
 		long bytesReceived = 0;
 		while(bytesReceived < fileSize) {
+			if (ftpServer.terminatePUT(path.resolve(tokens.get(1)), lockID)) {
+				f.close();
+				quit();
+				return;
+			}
 			count = byteStream.read(buffer);
 			f.write(buffer, 0, count);
 			bytesReceived += count;
@@ -243,6 +286,7 @@ public class NormalWorker implements Runnable {
 	public void quit() throws Exception {
 		//close socket
 		nSocket.close();
+		throw new Exception();
 	}
 	
 	public void run() {
@@ -281,7 +325,7 @@ public class NormalWorker implements Runnable {
 						System.out.println("invalid command");
 				}
 			} catch (Exception e) {
-				e.printStackTrace(); //TODO
+				break exitThread;
 			}
 		}
 		System.out.println(Thread.currentThread().getName() + " exit");

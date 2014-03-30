@@ -1,5 +1,13 @@
 package ftp.client;
 
+/**
+ * 
+ * @author Will Henry
+ * @author Vincent Lee
+ * @version 1.0
+ * @since March 26, 2014
+ */
+
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
@@ -78,14 +86,17 @@ public class PutWorker implements Runnable {
 			//CLIENT side locking
 			ftpClient.transferIN(serverPath.resolve(tokens.get(1)), terminateID);
 			
+			if (ftpClient.terminatePUT(serverPath.resolve(tokens.get(1)), terminateID)) return;
+			
 			//signal to start writing
 			reader.readLine();
 			
 			//need to figure
 			Thread.sleep(100);
 			
+			if (ftpClient.terminatePUT(serverPath.resolve(tokens.get(1)), terminateID)) return;
 			
-			byte[] buffer = new byte[8192];
+			byte[] buffer = new byte[1000];
 			try {
 				File file = new File(path.resolve(tokens.get(1)).toString());
 				
@@ -94,11 +105,18 @@ public class PutWorker implements Runnable {
 				byte[] fileSizeBytes = ByteBuffer.allocate(8).putLong(fileSize).array();
 				dStream.write(fileSizeBytes, 0, 8);
 				
+				if (ftpClient.terminatePUT(serverPath.resolve(tokens.get(1)), terminateID)) return;
+				
 				//write file
 				BufferedInputStream in = new BufferedInputStream(new FileInputStream(file));
 				int count = 0;
-				while((count = in.read(buffer)) > 0)
+				while((count = in.read(buffer)) > 0) {
+					if (ftpClient.terminatePUT(serverPath.resolve(tokens.get(1)), terminateID)) {
+						in.close();
+						return;
+					}
 					dStream.write(buffer, 0, count);
+				}
 				
 				in.close();
 			} catch(Exception e){

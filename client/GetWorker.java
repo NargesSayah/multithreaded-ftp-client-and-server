@@ -1,5 +1,13 @@
 package ftp.client;
 
+/**
+ * 
+ * @author Will Henry
+ * @author Vincent Lee
+ * @version 1.0
+ * @since March 26, 2014
+ */
+
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -17,7 +25,7 @@ import java.util.List;
 public class GetWorker implements Runnable {
 	private FTPClient ftpClient;
 	private Socket socket;
-	private Path serverPath;
+	private Path serverPath, path;
 	private List<String> tokens;
 	private int terminateID;
 	
@@ -28,11 +36,11 @@ public class GetWorker implements Runnable {
 	private OutputStream oStream;
 	private DataOutputStream dStream;
 	
-	
-	public GetWorker(FTPClient ftpClient, String hostname, int nPort, List<String> tokens, Path serverPath) throws Exception {
+	public GetWorker(FTPClient ftpClient, String hostname, int nPort, List<String> tokens, Path serverPath, Path path) throws Exception {
 		this.ftpClient = ftpClient;
 		this.tokens = tokens;
 		this.serverPath = serverPath;
+		this.path = path;
 		
 		InetAddress ip = InetAddress.getByName(hostname);
 		socket = new Socket();
@@ -73,6 +81,7 @@ public class GetWorker implements Runnable {
 		//CLIENT side locking
 		ftpClient.transferIN(serverPath.resolve(tokens.get(1)), terminateID);
 		
+		if (ftpClient.terminateGET(path.resolve(tokens.get(1)), serverPath.resolve(tokens.get(1)), terminateID)) return;
 		
 		//get file size
 		byte[] fileSizeBuffer = new byte[8];
@@ -81,12 +90,18 @@ public class GetWorker implements Runnable {
 		DataInputStream dis = new DataInputStream(bais);
 		long fileSize = dis.readLong();
 		
+		if (ftpClient.terminateGET(path.resolve(tokens.get(1)), serverPath.resolve(tokens.get(1)), terminateID)) return;
+		
 		//receive the file
 		FileOutputStream f = new FileOutputStream(new File(tokens.get(1)));
 		int count = 0;
 		byte[] buffer = new byte[8192];
 		long bytesReceived = 0;
 		while(bytesReceived < fileSize) {
+			if (ftpClient.terminateGET(path.resolve(tokens.get(1)), serverPath.resolve(tokens.get(1)), terminateID)) {
+				f.close();
+				return;
+			}
 			count = byteStream.read(buffer);
 			f.write(buffer, 0, count);
 			bytesReceived += count;

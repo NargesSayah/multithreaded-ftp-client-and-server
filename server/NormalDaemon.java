@@ -1,5 +1,13 @@
 package ftp.server;
 
+/**
+ * 
+ * @author Will Henry
+ * @author Vincent Lee
+ * @version 1.0
+ * @since March 26, 2014
+ */
+
 import java.net.ServerSocket;
 
 public class NormalDaemon implements Runnable {

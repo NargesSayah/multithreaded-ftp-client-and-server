@@ -1,28 +1,35 @@
 package ftp.server;
 
+/**
+ * 
+ * @author Will Henry
+ * @author Vincent Lee
+ * @version 1.0
+ * @since March 26, 2014
+ */
+
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-/**
- * 
- * @author vincentlee
- *
- */
 
 public class FTPServer {
 	private Map<Path, ReentrantReadWriteLock> transferMap;
 	private Map<Integer, Path> commandIDMap;
 	private Queue<Integer> writeQueue;
+	private Set<Integer> terminateSet;
 	
 	public FTPServer() {
 		transferMap = new HashMap<Path, ReentrantReadWriteLock>();
 		commandIDMap = new HashMap<Integer, Path>();
 		writeQueue = new LinkedList<Integer>();
+		terminateSet = new HashSet<Integer>();
 	}
 	
 	public synchronized int getIN(Path path) {
@@ -61,18 +68,20 @@ public class FTPServer {
 	}
 	
 	public synchronized void getOUT(Path path, int commandID) {
-		System.out.println(transferMap.toString());
-		System.out.println(commandIDMap.toString());
+//		System.out.println(transferMap.toString());
+//		System.out.println(commandIDMap.toString());
 		
-		//remove locks
-		transferMap.get(path).readLock().unlock();
-		commandIDMap.remove(commandID);
+		try {
+			//remove locks
+			transferMap.get(path).readLock().unlock();
+			commandIDMap.remove(commandID);
+			
+			if (transferMap.get(path).getReadLockCount() == 0 && !transferMap.get(path).isWriteLocked())
+				transferMap.remove(path);
+		} catch (Exception e) {}
 		
-		if (transferMap.get(path).getReadLockCount() == 0 && !transferMap.get(path).isWriteLocked())
-			transferMap.remove(path);
-		
-		System.out.println(transferMap.toString());
-		System.out.println(commandIDMap.toString());
+//		System.out.println(transferMap.toString());
+//		System.out.println(commandIDMap.toString());
 	}
 	
 	public synchronized int putIN_ID(Path path) {
@@ -107,17 +116,19 @@ public class FTPServer {
 	}
 	
 	public synchronized void putOUT(Path path, int commandID) {
-		System.out.println(transferMap.toString());
-		System.out.println(commandIDMap.toString());
+//		System.out.println(transferMap.toString());
+//		System.out.println(commandIDMap.toString());
 		
-		transferMap.get(path).writeLock().unlock();
-		commandIDMap.remove(commandID);
+		try {
+			transferMap.get(path).writeLock().unlock();
+			commandIDMap.remove(commandID);
+			
+			if (transferMap.get(path).getReadLockCount() == 0 && !transferMap.get(path).isWriteLocked())
+				transferMap.remove(path);
+		} catch (Exception e) {}
 		
-		if (transferMap.get(path).getReadLockCount() == 0 && !transferMap.get(path).isWriteLocked())
-			transferMap.remove(path);
-		
-		System.out.println(transferMap.toString());
-		System.out.println(commandIDMap.toString());
+//		System.out.println(transferMap.toString());
+//		System.out.println(commandIDMap.toString());
 	}
 	
 	public int generateID() {
@@ -127,8 +138,41 @@ public class FTPServer {
 	public synchronized boolean delete(Path path) {
 		return !transferMap.containsKey(path);
 	}
+	
+	public synchronized void terminate(int commandID) {
+		terminateSet.add(commandID);
+	}
+
+	public boolean terminateGET(Path path, int commandID) {
+		try {
+			if (terminateSet.contains(commandID)) {
+				terminateSet.remove(commandID);
+				commandIDMap.remove(commandID);
+				transferMap.get(path).readLock().unlock();
+				
+				if (transferMap.get(path).getReadLockCount() == 0 && !transferMap.get(path).isWriteLocked())
+					transferMap.remove(path);
+				return true;
+			}
+		} catch (Exception e) {}
+		
+		return false;
+	}
+	
+	public boolean terminatePUT(Path path, int commandID) {
+		try {
+			if (terminateSet.contains(commandID)) {
+				terminateSet.remove(commandID);
+				commandIDMap.remove(commandID);
+				transferMap.get(path).writeLock().unlock();
+				Files.deleteIfExists(path);
+				
+				if (transferMap.get(path).getReadLockCount() == 0 && !transferMap.get(path).isWriteLocked())
+					transferMap.remove(path);
+				return true;
+			}
+		} catch (Exception e) {}
+		
+		return false;
+	}
 }
-
-
-//ReadWriteLock lock = new ReentrantReadWriteLock();
-//lock.writeLock().lock();

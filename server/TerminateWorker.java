@@ -1,5 +1,13 @@
 package ftp.server;
 
+/**
+ * 
+ * @author Will Henry
+ * @author Vincent Lee
+ * @version 1.0
+ * @since March 26, 2014
+ */
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.Socket;
@@ -43,7 +51,9 @@ public class TerminateWorker implements Runnable {
 			//command selector
 			switch(tokens.get(0)) {
 				case "terminate":
-//					ftpServer.terminate(tokens.get(1));
+					ftpServer.terminate(Integer.parseInt(tokens.get(1)));
+					System.out.println("server==" + tokens.get(1));
+					break;
 				default:
 					System.out.println("TerminateWorker invalid command");
 			}

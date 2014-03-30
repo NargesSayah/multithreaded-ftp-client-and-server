@@ -1,5 +1,13 @@
 package ftp.client;
 
+/**
+ * 
+ * @author Will Henry
+ * @author Vincent Lee
+ * @version 1.0
+ * @since March 26, 2014
+ */
+
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
@@ -28,7 +36,6 @@ public class Worker implements Runnable {
 	private Socket socket;
 	private Path path, serverPath;
 	private List<String> tokens;
-	private boolean input;
 	private int terminateID;
 	
 	//Stream
@@ -51,9 +58,6 @@ public class Worker implements Runnable {
 		
 		//Streams
 		initiateStream();
-		
-		//thread with keyboard input
-		input = true;
 		
 		//Set current working directory
 		path = Paths.get(System.getProperty("user.dir"));
@@ -98,8 +102,9 @@ public class Worker implements Runnable {
 			
 			List<String> tempList = new ArrayList<String>(tokens);
 			Path tempPath = Paths.get(serverPath.toString());
+			Path tempPathClient = Paths.get(path.toString());
 			
-			(new Thread(new GetWorker(ftpClient, hostname, nPort, tempList, tempPath))).start();
+			(new Thread(new GetWorker(ftpClient, hostname, nPort, tempList, tempPath, tempPathClient))).start();
 			
 			Thread.sleep(50);
 			
@@ -144,7 +149,7 @@ public class Worker implements Runnable {
 		//receive the file
 		FileOutputStream f = new FileOutputStream(new File(tokens.get(1)));
 		int count = 0;
-		byte[] buffer = new byte[8192];
+		byte[] buffer = new byte[1000];
 		long bytesReceived = 0;
 		while(bytesReceived < fileSize) {
 			count = byteStream.read(buffer);
@@ -214,7 +219,7 @@ public class Worker implements Runnable {
 			Thread.sleep(100);
 			
 			
-			byte[] buffer = new byte[8192];
+			byte[] buffer = new byte[1000];
 			try {
 				File file = new File(path.resolve(tokens.get(1)).toString());
 				
@@ -374,6 +379,16 @@ public class Worker implements Runnable {
 			notSupported();
 			return;
 		}
+		
+		try {
+			int terminateID = Integer.parseInt(tokens.get(1));
+			if (!ftpClient.terminateADD(terminateID))
+				System.out.println("Invalid TerminateID");
+			else
+				(new Thread(new TerminateWorker(hostname, Main.tPort, terminateID))).start();
+		} catch (Exception e) {
+			System.out.println("Invalid TerminateID");
+		}
 	}
 	
 	public void notSupported() {
@@ -454,8 +469,6 @@ public class Worker implements Runnable {
 	}
 	
 	public void run() {
-		if (input) {
-			input();
-		}
+		input();
 	}
 }
