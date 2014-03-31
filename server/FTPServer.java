@@ -78,7 +78,9 @@ public class FTPServer {
 			
 			if (transferMap.get(path).getReadLockCount() == 0 && !transferMap.get(path).isWriteLocked())
 				transferMap.remove(path);
-		} catch (Exception e) {}
+		} catch (Exception e) {
+			e.printStackTrace(); //TODO
+		}
 		
 //		System.out.println(transferMap.toString());
 //		System.out.println(commandIDMap.toString());
@@ -96,11 +98,16 @@ public class FTPServer {
 	}
 	
 	public synchronized boolean putIN(Path path, int commandID) {
+//		System.out.print("-putIN");status();
+		
 		if (writeQueue.peek() == commandID) {
 			if (transferMap.containsKey(path)) {
 				if (transferMap.get(path).writeLock().tryLock()) {
 					
-					writeQueue.poll();
+//					writeQueue.poll();
+					
+//					System.out.print("+putIN");status();
+					
 					return true;
 				} else
 					return false;
@@ -108,7 +115,9 @@ public class FTPServer {
 				transferMap.put(path, new ReentrantReadWriteLock());
 				transferMap.get(path).writeLock().lock();
 				
-				writeQueue.poll();
+//				writeQueue.poll();
+				
+//				System.out.print("+putIN");status();
 				return true;
 			}
 		}
@@ -116,19 +125,20 @@ public class FTPServer {
 	}
 	
 	public synchronized void putOUT(Path path, int commandID) {
-//		System.out.println(transferMap.toString());
-//		System.out.println(commandIDMap.toString());
+//		System.out.print("-putOUT");status();
 		
 		try {
 			transferMap.get(path).writeLock().unlock();
 			commandIDMap.remove(commandID);
+			writeQueue.poll();
 			
 			if (transferMap.get(path).getReadLockCount() == 0 && !transferMap.get(path).isWriteLocked())
 				transferMap.remove(path);
-		} catch (Exception e) {}
+		} catch (Exception e) {
+			e.printStackTrace(); //TODO
+		}
 		
-//		System.out.println(transferMap.toString());
-//		System.out.println(commandIDMap.toString());
+//		System.out.print("+putOUT");status();
 	}
 	
 	public int generateID() {
@@ -154,25 +164,52 @@ public class FTPServer {
 					transferMap.remove(path);
 				return true;
 			}
-		} catch (Exception e) {}
+		} catch (Exception e) {
+			e.printStackTrace(); //TODO
+		}
 		
 		return false;
 	}
 	
 	public boolean terminatePUT(Path path, int commandID) {
+//		System.out.print("-terminatePUT");status();
+		
 		try {
 			if (terminateSet.contains(commandID)) {
 				terminateSet.remove(commandID);
 				commandIDMap.remove(commandID);
 				transferMap.get(path).writeLock().unlock();
+				writeQueue.poll();
 				Files.deleteIfExists(path);
 				
 				if (transferMap.get(path).getReadLockCount() == 0 && !transferMap.get(path).isWriteLocked())
 					transferMap.remove(path);
+				
+//				System.out.print("+terminatePUT");status();
 				return true;
 			}
-		} catch (Exception e) {}
+		} catch (Exception e) {
+			e.printStackTrace(); //TODO
+		}
 		
 		return false;
+	}
+	
+	public void status() {
+		System.out.println("FTPServer: transferMap-commandIDMap-writeQueue-terminateSet");
+		System.out.println(transferMap.toString());
+		System.out.println(commandIDMap.toString());
+		System.out.println(writeQueue.toString());
+		System.out.println(terminateSet.toString());
+	}
+	
+	/* (non-Javadoc)
+	 * @see java.lang.Object#toString()
+	 */
+	@Override
+	public String toString() {
+		return "FTPServer [transferMap=" + transferMap + ", commandIDMap="
+				+ commandIDMap + ", writeQueue=" + writeQueue
+				+ ", terminateSet=" + terminateSet + "]";
 	}
 }
