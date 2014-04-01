@@ -153,7 +153,7 @@ public class FTPServer {
 		terminateSet.add(commandID);
 	}
 
-	public boolean terminateGET(Path path, int commandID) {
+	public synchronized boolean terminateGET(Path path, int commandID) {
 		try {
 			if (terminateSet.contains(commandID)) {
 				terminateSet.remove(commandID);
@@ -171,7 +171,7 @@ public class FTPServer {
 		return false;
 	}
 	
-	public boolean terminatePUT(Path path, int commandID) {
+	public synchronized boolean terminatePUT(Path path, int commandID) {
 //		System.out.print("-terminatePUT");status();
 		
 		try {
