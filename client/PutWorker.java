@@ -79,7 +79,7 @@ public class PutWorker implements Runnable {
 			try {
 				terminateID = Integer.parseInt(reader.readLine());
 			} catch(Exception e) {
-				System.out.println("Invalid TerminateID");
+				if (Main.DEBUG) System.out.println("Invalid TerminateID");
 			}
 			System.out.println("TerminateID: " + terminateID);
 			
@@ -120,7 +120,7 @@ public class PutWorker implements Runnable {
 				
 				in.close();
 			} catch(Exception e){
-				System.out.println("transfer error: " + tokens.get(1));
+				if (Main.DEBUG) System.out.println("transfer error: " + tokens.get(1));
 			}
 			
 			//CLIENT side un-locking
@@ -131,9 +131,10 @@ public class PutWorker implements Runnable {
 	public void run() {
 		try {
 			put();
+			Thread.sleep(100);
 			dStream.writeBytes("quit" + "\n");
 		} catch (Exception e) {
-			System.out.println("PutWorker error");
+			if (Main.DEBUG) System.out.println("PutWorker error");
 		}
 	}
 }

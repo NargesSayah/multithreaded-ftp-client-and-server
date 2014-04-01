@@ -52,14 +52,14 @@ public class TerminateWorker implements Runnable {
 			switch(tokens.get(0)) {
 				case "terminate":
 					ftpServer.terminate(Integer.parseInt(tokens.get(1)));
-					System.out.println("server==" + tokens.get(1));
+					System.out.println("Terminate Interrupt=" + tokens.get(1));
 					break;
 				default:
-					System.out.println("TerminateWorker invalid command");
+					if (Main.DEBUG) System.out.println("TerminateWorker invalid command");
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			if (Main.DEBUG) e.printStackTrace();
 		}
-		
+		System.out.println(Thread.currentThread().getName() + " TerminateWorker Exited");
 	}
 }

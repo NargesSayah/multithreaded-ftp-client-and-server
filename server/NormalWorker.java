@@ -125,7 +125,7 @@ public class NormalWorker implements Runnable {
 			
 			in.close();
 		} catch(Exception e) {
-			System.out.println("transfer error: " + tokens.get(1));
+			if (Main.DEBUG) System.out.println("transfer error: " + tokens.get(1));
 		}
 		
 		////////////
@@ -328,6 +328,6 @@ public class NormalWorker implements Runnable {
 				break exitThread;
 			}
 		}
-		System.out.println(Thread.currentThread().getName() + " exit");
+		System.out.println(Thread.currentThread().getName() + " NormalWorker Exited");
 	}
 }

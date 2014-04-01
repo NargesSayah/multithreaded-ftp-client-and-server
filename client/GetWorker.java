@@ -74,7 +74,7 @@ public class GetWorker implements Runnable {
 		try {
 			terminateID = Integer.parseInt(reader.readLine());
 		} catch(Exception e) {
-			System.out.println("Invalid TerminateID");
+			if (Main.DEBUG) System.out.println("Invalid TerminateID");
 		}
 		System.out.println("TerminateID: " + terminateID);
 		
@@ -115,9 +115,10 @@ public class GetWorker implements Runnable {
 	public void run() {
 		try {
 			get();
+			Thread.sleep(100);
 			dStream.writeBytes("quit" + "\n");
 		} catch (Exception e) {
-			System.out.println("GetWorker error");
+			if (Main.DEBUG) System.out.println("GetWorker error");
 		}
 	}
 }

@@ -86,7 +86,7 @@ public class Worker implements Runnable {
 				serverPath = Paths.get(get_line);
 			}
 		} catch (Exception e) {
-			System.out.println("stream initiation error"); //TODO
+			if (Main.DEBUG) System.out.println("stream initiation error"); //TODO
 		}
 	}
 	
@@ -131,7 +131,7 @@ public class Worker implements Runnable {
 		try {
 			terminateID = Integer.parseInt(reader.readLine());
 		} catch(Exception e) {
-			System.out.println("Invalid TerminateID");
+			if (Main.DEBUG) System.out.println("Invalid TerminateID");
 		}
 		//System.out.println("TerminateID: " + terminateID);
 		
@@ -205,7 +205,7 @@ public class Worker implements Runnable {
 			try {
 				terminateID = Integer.parseInt(reader.readLine());
 			} catch(Exception e) {
-				System.out.println("Invalid TerminateID");
+				if (Main.DEBUG) System.out.println("Invalid TerminateID");
 			}
 			//System.out.println("TerminateID: " + terminateID);
 			
@@ -228,6 +228,8 @@ public class Worker implements Runnable {
 				byte[] fileSizeBytes = ByteBuffer.allocate(8).putLong(fileSize).array();
 				dStream.write(fileSizeBytes, 0, 8);
 				
+				Thread.sleep(100);
+				
 				//write file
 				BufferedInputStream in = new BufferedInputStream(new FileInputStream(file));
 				int count = 0;
@@ -236,7 +238,7 @@ public class Worker implements Runnable {
 				
 				in.close();
 			} catch(Exception e){
-				System.out.println("transfer error: " + tokens.get(1));
+				if (Main.DEBUG) System.out.println("transfer error: " + tokens.get(1));
 			}
 			
 			//CLIENT side un-locking
@@ -464,7 +466,7 @@ public class Worker implements Runnable {
 			System.out.println(Main.EXIT_MESSAGE);
 		} catch (Exception e) {
 			System.out.println("error: disconnected from host");
-			e.printStackTrace(); //TODO
+			if (Main.DEBUG) e.printStackTrace(); //TODO
 		}
 	}
 	

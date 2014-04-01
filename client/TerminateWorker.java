@@ -36,7 +36,7 @@ public class TerminateWorker implements Runnable {
 		try {
 			dStream.writeBytes("terminate " + terminateID + "\n");
 		} catch (IOException e) {
-			System.out.println("TerminateWorker");
+			if (Main.DEBUG) System.out.println("TerminateWorker");
 		}
 	}
 }

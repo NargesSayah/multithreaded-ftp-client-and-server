@@ -79,7 +79,7 @@ public class FTPServer {
 			if (transferMap.get(path).getReadLockCount() == 0 && !transferMap.get(path).isWriteLocked())
 				transferMap.remove(path);
 		} catch (Exception e) {
-			e.printStackTrace(); //TODO
+			if (Main.DEBUG) e.printStackTrace(); //TODO
 		}
 		
 //		System.out.println(transferMap.toString());
@@ -135,7 +135,7 @@ public class FTPServer {
 			if (transferMap.get(path).getReadLockCount() == 0 && !transferMap.get(path).isWriteLocked())
 				transferMap.remove(path);
 		} catch (Exception e) {
-			e.printStackTrace(); //TODO
+			if (Main.DEBUG) e.printStackTrace(); //TODO
 		}
 		
 //		System.out.print("+putOUT");status();
@@ -165,7 +165,7 @@ public class FTPServer {
 				return true;
 			}
 		} catch (Exception e) {
-			e.printStackTrace(); //TODO
+			if (Main.DEBUG) e.printStackTrace(); //TODO
 		}
 		
 		return false;
@@ -189,7 +189,7 @@ public class FTPServer {
 				return true;
 			}
 		} catch (Exception e) {
-			e.printStackTrace(); //TODO
+			if (Main.DEBUG) e.printStackTrace(); //TODO
 		}
 		
 		return false;
